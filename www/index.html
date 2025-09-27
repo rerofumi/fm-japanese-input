@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM 日本語変換</title>
+    <script src="/neutralino.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap');
+        body {
+            font-family: 'Inter', 'Noto Sans JP', sans-serif;
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        /* Custom scrollbar for history */
+        #historyList::-webkit-scrollbar {
+            width: 6px;
+        }
+        #historyList::-webkit-scrollbar-track {
+            background: #2d3748; /* bg-gray-800 */
+        }
+        #historyList::-webkit-scrollbar-thumb {
+            background: #4a5568; /* bg-gray-600 */
+            border-radius: 3px;
+        }
+        #historyList::-webkit-scrollbar-thumb:hover {
+            background: #718096; /* bg-gray-500 */
+        }
+        /* Toggle Switch styling */
+        .toggle-checkbox:checked {
+            right: 0;
+            border-color: #4A90E2;
+        }
+        .toggle-checkbox:checked + .toggle-label {
+            background-color: #4A90E2;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto p-6 md:p-8 bg-gray-800 rounded-2xl shadow-2xl space-y-6">
+        
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-gray-100">LLM 日本語変換</h1>
+            <p class="text-gray-400 mt-2">ローマ字と英語を混ぜて入力すると、自然な日本語に変換します。</p>
+        </div>
+
+        <!-- Preview Toggle Switch -->
+        <div class="flex items-center justify-center gap-3">
+            <label for="previewToggle" class="text-sm font-medium text-gray-300">リアルタイムプレビュー (お試し)</label>
+            <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                <input type="checkbox" name="toggle" id="previewToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                <label for="previewToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-600 cursor-pointer"></label>
+            </div>
+        </div>
+
+
+        <!-- Input Area -->
+        <div>
+            <label for="inputText" class="block text-sm font-medium text-gray-300 mb-2">入力 (半角英数) / Ctrl+Enterで変換</label>
+            <textarea id="inputText" rows="6" class="w-full p-4 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all duration-200 text-gray-200 placeholder-gray-500" placeholder="例: kyou ha tenki ga ii desu ne. this is a pen."></textarea>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex justify-center items-center gap-4">
+             <button id="resetButton" title="入力を消去" class="bg-gray-600 hover:bg-gray-500 text-white font-bold p-3 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-700 shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+            </button>
+            <button id="convertButton" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-800 shadow-lg w-48 h-[50px]">
+                <span id="buttonText">変換</span>
+                <div id="buttonLoader" class="loader hidden" style="width:20px; height:20px; border-width: 2px; display:none; margin: 0 auto;"></div>
+            </button>
+            <button id="copyButton" title="結果をコピー" class="bg-gray-600 hover:bg-gray-500 text-white font-bold p-3 rounded-lg transition-all duration-200 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-700 shadow-lg">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>
+            </button>
+        </div>
+
+        <!-- Output Area -->
+        <div>
+            <label for="outputText" class="block text-sm font-medium text-gray-300 mb-2">変換結果</label>
+            <div id="outputContainer" class="w-full p-4 h-40 bg-gray-900 border border-gray-600 rounded-lg text-gray-200 overflow-y-auto">
+                <p id="outputText" class="whitespace-pre-wrap"></p>
+                <div id="outputLoader" class="w-full h-full flex items-center justify-center hidden">
+                    <div class="loader"></div>
+                </div>
+                 <div id="errorMessage" class="w-full h-full flex items-center justify-center text-red-400 hidden">
+                    <p>エラーが発生しました。時間をおいて再度お試しください。</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- History Section -->
+        <div id="historySection" class="pt-4 space-y-3">
+            <div class="flex justify-between items-center">
+                <h2 class="text-lg font-semibold text-gray-300">変換履歴</h2>
+                <button id="clearHistoryButton" class="text-xs text-gray-400 hover:text-white hover:bg-red-600 px-2 py-1 rounded-md transition-colors">履歴を消去</button>
+            </div>
+            <ul id="historyList" class="space-y-2 max-h-40 overflow-y-auto pr-2">
+                <!-- History items will be injected here by JavaScript -->
+            </ul>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center text-xs text-gray-500 pt-4 border-t border-gray-700">
+            <p>Powered by Google Gemini</p>
+        </div>
+
+    </div>
+
+    <script>
+        const inputText = document.getElementById('inputText');
+        const convertButton = document.getElementById('convertButton');
+        const buttonText = document.getElementById('buttonText');
+        const buttonLoader = document.getElementById('buttonLoader');
+        const outputText = document.getElementById('outputText');
+        const outputLoader = document.getElementById('outputLoader');
+        const errorMessage = document.getElementById('errorMessage');
+        const resetButton = document.getElementById('resetButton');
+        const copyButton = document.getElementById('copyButton');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryButton = document.getElementById('clearHistoryButton');
+        const previewToggle = document.getElementById('previewToggle');
+
+        let conversionHistory = [];
+        const HISTORY_KEY = 'llmImeConversionHistory';
+        const MAX_HISTORY_ITEMS = 10;
+        
+        // --- Preview Feature State ---
+        let previewTimer = null;
+        let lastCheckedInputForPreview = '';
+        const PREVIEW_TICK_INTERVAL = 3000; // 3秒間隔に戻し、リクエスト頻度を調整
+
+        const systemPrompt = `あなたは、ローマ字と英語が混在したテキストを自然な日本語に変換する高度な日本語入力システムです。以下のルールに厳密に従ってください。
+1.  入力テキストに含まれるローマ字の部分を、文脈に最も適した日本語（ひらがな、カタカナ、漢字）に変換します。
+2.  入力テキストに含まれる英単語や英文は、そのまま英語として残します。大文字・小文字も維持してください。
+3.  ローマ字入力の多少のタイプミスやスペルミスは、文脈から正しい日本語を推測して自動で修正してください。
+4.  変換結果以外の余計な説明、前置き、後書きは一切含めず、変換後の日本語の文章のみを出力してください。
+5.  入力が空の場合は、何も出力しないでください。`;
+
+        // Refactored API call logic
+        async function callGeminiAPI(userInput) {
+            const apiKey = "xxxDUMMYxxx"; 
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            const payload = {
+                contents: [{ parts: [{ text: userInput }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+            
+            let response;
+            let success = false;
+            let delay = 1000;
+            for (let i = 0; i < 3; i++) { // Reduced retries for faster feedback
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (response.ok) {
+                        success = true;
+                        break;
+                    }
+                    if (response.status === 429 || response.status >= 500) {
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2;
+                    } else {
+                        break;
+                    }
+                } catch (error) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+            
+            if (!success || !response.ok) throw new Error('API request failed after multiple retries.');
+
+            const result = await response.json();
+            const candidate = result.candidates?.[0];
+
+            if (candidate && candidate.content?.parts?.[0]?.text) {
+                return candidate.content.parts[0].text;
+            } else {
+                console.error('Unexpected API response structure:', result);
+                throw new Error('Invalid API response structure.');
+            }
+        }
+
+        // Convert button click handler
+        convertButton.addEventListener('click', async () => {
+            const userInput = inputText.value.trim();
+            if (!userInput) return;
+
+            setLoading(true);
+            try {
+                const convertedText = await callGeminiAPI(userInput);
+                setFinalOutput(convertedText);
+                lastCheckedInputForPreview = userInput; // 変換が成功した入力を記録し、不要なプレビューを防ぐ
+                addToHistory(userInput, convertedText);
+            } catch (error) {
+                console.error('Error:', error);
+                showError();
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        const copyIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-clipboard"><rect width="8" height="4" x="8" y="2" rx="1" ry="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg>`;
+        const checkIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-check"><path d="M20 6 9 17l-5-5"/></svg>`;
+        
+        resetButton.addEventListener('click', () => {
+            inputText.value = '';
+            clearOutput();
+            inputText.focus();
+        });
+
+        copyButton.addEventListener('click', () => {
+            const textToCopy = outputText.textContent;
+            if (!textToCopy || copyButton.disabled || outputText.classList.contains('text-gray-500')) return; // Don't copy preview
+            
+            const tempTextArea = document.createElement('textarea');
+            tempTextArea.value = textToCopy;
+            document.body.appendChild(tempTextArea);
+            tempTextArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(tempTextArea);
+
+            copyButton.innerHTML = checkIcon;
+            copyButton.disabled = true;
+
+            setTimeout(() => {
+                copyButton.innerHTML = copyIcon;
+                copyButton.disabled = false;
+            }, 2000);
+        });
+
+        inputText.addEventListener('keydown', (event) => {
+            if (event.key === 'Enter' && event.ctrlKey) {
+                event.preventDefault();
+                convertButton.click();
+            }
+        });
+
+        // --- UI State Functions ---
+        function setLoading(isLoading) {
+            convertButton.disabled = isLoading;
+            resetButton.disabled = isLoading;
+            copyButton.disabled = isLoading;
+            buttonText.style.display = isLoading ? 'none' : 'inline';
+            buttonLoader.style.display = isLoading ? 'block' : 'none';
+            if (isLoading) {
+                stopPreviewTimer(); // 変換処理中はプレビュータイマーを停止
+                clearOutput();
+                outputLoader.classList.remove('hidden');
+            } else {
+                outputLoader.classList.add('hidden');
+                if (previewToggle.checked) {
+                    startPreviewTimer(); // 処理完了後、プレビューがONならタイマーを再開
+                }
+            }
+        }
+        
+        function showError() {
+            clearOutput();
+            errorMessage.classList.remove('hidden');
+        }
+
+        function clearOutput() {
+            outputText.textContent = '';
+            outputText.classList.remove('text-gray-500'); // Remove preview style
+            errorMessage.classList.add('hidden');
+            outputLoader.classList.add('hidden');
+        }
+        
+        function setFinalOutput(text) {
+            clearOutput();
+            outputText.textContent = text;
+        }
+
+        function setPreviewOutput(text) {
+            clearOutput();
+            outputText.textContent = text;
+            outputText.classList.add('text-gray-500'); // Apply preview style
+        }
+
+
+        // --- Preview Feature Logic ---
+        previewToggle.addEventListener('change', () => {
+            if (previewToggle.checked) {
+                startPreviewTimer();
+            } else {
+                stopPreviewTimer();
+                clearOutput();
+            }
+        });
+
+        function startPreviewTimer() {
+            if (previewTimer) return;
+            previewTimer = setInterval(handlePreviewTick, PREVIEW_TICK_INTERVAL);
+        }
+
+        function stopPreviewTimer() {
+            clearInterval(previewTimer);
+            previewTimer = null;
+        }
+
+        async function handlePreviewTick() {
+            if (convertButton.disabled) return; // Don't run if a conversion is in progress
+
+            const currentInput = inputText.value.trim();
+            
+            // Do nothing if input hasn't changed since last tick
+            if (currentInput === lastCheckedInputForPreview) return;
+            lastCheckedInputForPreview = currentInput;
+
+            if (!currentInput) {
+                clearOutput();
+                return;
+            }
+            
+            // 文字数変化のチェックを撤廃し、入力が続いていればプレビューを実行するように変更
+            
+            try {
+                const previewText = await callGeminiAPI(currentInput);
+                // 入力が続いている間もプレビューを表示するため、条件分岐を削除
+                setPreviewOutput(previewText);
+            } catch (error) {
+                console.error('Preview failed:', error); // Fail silently in UI
+            }
+        }
+
+        // --- History Functions ---
+        function loadHistory() {
+            const storedHistory = localStorage.getItem(HISTORY_KEY);
+            if (storedHistory) {
+                conversionHistory = JSON.parse(storedHistory);
+            }
+            renderHistory();
+        }
+
+        function saveHistory() {
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(conversionHistory));
+        }
+
+        function addToHistory(input, output) {
+            const newEntry = { input, output, id: Date.now() };
+            if (conversionHistory.some(entry => entry.input === input && entry.output === output)) {
+                return;
+            }
+            conversionHistory.unshift(newEntry);
+            if (conversionHistory.length > MAX_HISTORY_ITEMS) {
+                conversionHistory.pop();
+            }
+            saveHistory();
+            renderHistory();
+        }
+
+        function renderHistory() {
+            historyList.innerHTML = '';
+            if (conversionHistory.length === 0) {
+                historyList.innerHTML = `<li class="text-center text-sm text-gray-500 py-4">履歴はありません</li>`;
+                clearHistoryButton.style.display = 'none';
+                return;
+            }
+            clearHistoryButton.style.display = 'block';
+            conversionHistory.forEach(entry => {
+                const li = document.createElement('li');
+                li.className = 'bg-gray-700 p-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-600/70 transition-colors';
+                li.dataset.id = entry.id;
+                li.innerHTML = `
+                    <div class="flex-grow overflow-hidden">
+                        <p class="text-xs text-gray-400 truncate"><strong>入力:</strong> ${entry.input}</p>
+                        <p class="text-sm text-gray-200 truncate"><strong>出力:</strong> ${entry.output}</p>
+                    </div>
+                `;
+                historyList.appendChild(li);
+            });
+        }
+        
+        historyList.addEventListener('click', (e) => {
+            const li = e.target.closest('li');
+            if (li && li.dataset.id) {
+                const entryId = Number(li.dataset.id);
+                const entry = conversionHistory.find(item => item.id === entryId);
+                if (entry) {
+                    inputText.value = entry.input;
+                    setFinalOutput(entry.output);
+                    window.scrollTo(0, 0);
+                }
+            }
+        });
+
+        clearHistoryButton.addEventListener('click', () => {
+            conversionHistory = [];
+            saveHistory();
+            renderHistory();
+        });
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', loadHistory);
+
+    </script>
+</body>
+</html>
+
