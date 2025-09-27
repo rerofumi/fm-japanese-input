@@ -6,8 +6,13 @@
 /dist
 
 # Neutralinojs client (minified)
-neutralino.js
+# neutralino.js
 
 # Neutralinojs related files
+.env
 .storage
 *.log
+
+# Jujutsu repository
+.jj/
+

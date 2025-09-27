@@ -7,7 +7,10 @@
   "enableServer": true,
   "enableNativeAPI": true,
   "nativeAllowList": [
-    "app.*"
+    "app.*",
+    "os.getEnv",
+    "filesystem.readFile",
+    "filesystem.getJoinedPath"
   ],
   "modes": {
     "window": {
@@ -16,7 +19,8 @@
       "height": 790,
       "minWidth": 600,
       "minHeight": 400,
-      "icon": "/www/icon.png"
+      "icon": "/www/icon.png",
+      "enableInspector": false
     }
   },
   "cli": {
@@ -25,6 +29,7 @@
     "extensionsPath": "/extensions/",
     "clientLibrary": "/www/neutralino.js",
     "binaryVersion": "6.3.0",
-    "clientVersion": "6.3.0"
+    "clientVersion": "6.3.0",
+    "processArgs": "--env-file=.env"
   }
 }

@@ -137,6 +137,68 @@
         const HISTORY_KEY = 'llmImeConversionHistory';
         const MAX_HISTORY_ITEMS = 10;
         
+        // --- Neutralino init and env loading ---
+        let API_KEY = '';
+        Neutralino.init();
+
+        // Helper: parse KEY=VALUE lines from .env
+        function parseEnvKey(text, key) {
+            try {
+                const lines = text.split(/\r?\n/);
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || trimmed.startsWith('#')) continue;
+                    const eq = trimmed.indexOf('=');
+                    if (eq === -1) continue;
+                    const k = trimmed.slice(0, eq).trim();
+                    let v = trimmed.slice(eq + 1).trim();
+                    if (k === key) {
+                        // strip surrounding quotes if any
+                        if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith('\'') && v.endsWith('\''))) {
+                            v = v.slice(1, -1);
+                        }
+                        return v;
+                    }
+                }
+            } catch (_) { /* ignore */ }
+            return '';
+        }
+
+        async function loadApiKeyFromEnvFiles() {
+            const candidates = [];
+            try {
+                if (window.NL_PATH) {
+                    candidates.push(await Neutralino.filesystem.getJoinedPath(window.NL_PATH, '.env'));
+                }
+            } catch (_) { /* ignore */ }
+            try {
+                if (window.NL_CWD) {
+                    candidates.push(await Neutralino.filesystem.getJoinedPath(window.NL_CWD, '.env'));
+                }
+            } catch (_) { /* ignore */ }
+
+            for (const p of candidates) {
+                try {
+                    const txt = await Neutralino.filesystem.readFile(p);
+                    const val = parseEnvKey(txt, 'GEMINI_API_KEY');
+                    if (val) return val;
+                } catch (_) { /* ignore missing/permission */ }
+            }
+            return '';
+        }
+
+        Neutralino.events.on('ready', async () => {
+            try {
+                API_KEY = await Neutralino.os.getEnv('GEMINI_API_KEY');
+                if (!API_KEY) {
+                    API_KEY = await loadApiKeyFromEnvFiles();
+                }
+                console.log('Neutralino ready. API key loaded?', !!API_KEY);
+            } catch (e) {
+                console.error('Failed to resolve API key from env/.env:', e);
+            }
+        });
+        
         // --- Preview Feature State ---
         let previewTimer = null;
         let lastCheckedInputForPreview = '';
@@ -151,8 +213,10 @@
 
         // Refactored API call logic
         async function callGeminiAPI(userInput) {
-            const apiKey = "xxxDUMMYxxx"; 
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+            if (!API_KEY) {
+                throw new Error('GEMINI_API_KEY is not set. Ensure .env exists and nativeAllowList allows os.getEnv.');
+            }
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
             const payload = {
                 contents: [{ parts: [{ text: userInput }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
