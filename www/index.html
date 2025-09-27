@@ -112,11 +112,6 @@
             </ul>
         </div>
 
-        <!-- Footer -->
-        <div class="text-center text-xs text-gray-500 pt-4 border-t border-gray-700">
-            <p>Powered by Google Gemini</p>
-        </div>
-
     </div>
 
     <script>
@@ -137,8 +132,7 @@
         const HISTORY_KEY = 'llmImeConversionHistory';
         const MAX_HISTORY_ITEMS = 10;
         
-        // --- Neutralino init and env loading ---
-        let API_KEY = '';
+        // --- Neutralino init and env loading / config resolution ---
         Neutralino.init();
 
         // Helper: parse KEY=VALUE lines from .env
@@ -164,7 +158,7 @@
             return '';
         }
 
-        async function loadApiKeyFromEnvFiles() {
+        async function readEnvFileText() {
             const candidates = [];
             try {
                 if (window.NL_PATH) {
@@ -180,22 +174,95 @@
             for (const p of candidates) {
                 try {
                     const txt = await Neutralino.filesystem.readFile(p);
-                    const val = parseEnvKey(txt, 'GEMINI_API_KEY');
-                    if (val) return val;
+                    if (txt && typeof txt === 'string') return txt;
                 } catch (_) { /* ignore missing/permission */ }
             }
             return '';
         }
 
+        async function resolveEnvVar(key, envTextCacheRef) {
+            // 1) OS env
+            try {
+                const v = await Neutralino.os.getEnv(key);
+                if (v) return v;
+            } catch (_) { /* ignore */ }
+            // 2) .env
+            try {
+                if (!envTextCacheRef.text) {
+                    envTextCacheRef.text = await readEnvFileText();
+                }
+                if (envTextCacheRef.text) {
+                    return parseEnvKey(envTextCacheRef.text, key) || '';
+                }
+            } catch (_) { /* ignore */ }
+            return '';
+        }
+
+        const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-preview-05-20';
+        const providerLabelEl = () => document.querySelector('#providerLabel');
+
+        const appConfig = {
+            mode: 'none', // 'openai' | 'gemini' | 'none'
+            apiKey: '',
+            baseUrl: '',
+            model: ''
+        };
+
+        function normalizeBaseUrl(u) {
+            if (!u) return '';
+            return u.replace(/\/$/, '');
+        }
+
+        async function initConfigAndUI() {
+            const cache = { text: '' };
+            const LLM_API_KEY = (await resolveEnvVar('LLM_API_KEY', cache)).trim();
+            const LLM_BASE_URL = (await resolveEnvVar('LLM_BASE_URL', cache)).trim();
+            const LLM_MODEL    = (await resolveEnvVar('LLM_MODEL', cache)).trim();
+            const GEMINI_API_KEY = (await resolveEnvVar('GEMINI_API_KEY', cache)).trim();
+
+            // Decide mode per precedence:
+            // 1) OpenAI-compatible if LLM_BASE_URL and LLM_MODEL are provided. LLM_API_KEY is optional (for Ollama).
+            if (LLM_BASE_URL && LLM_MODEL) {
+                appConfig.mode = 'openai';
+                appConfig.baseUrl = LLM_BASE_URL;
+                appConfig.model = LLM_MODEL;
+                appConfig.apiKey = LLM_API_KEY; // may be ''
+            }
+            // 2) Gemini if not openai and GEMINI_API_KEY exists
+            else if (GEMINI_API_KEY) {
+                appConfig.mode = 'gemini';
+                appConfig.baseUrl = '';
+                appConfig.model = LLM_MODEL || DEFAULT_GEMINI_MODEL; // allow override via LLM_MODEL
+                appConfig.apiKey = GEMINI_API_KEY;
+            } else {
+                appConfig.mode = 'none';
+            }
+
+            // Update footer label
+            const labelNode = providerLabelEl();
+            if (labelNode) {
+                labelNode.textContent = (appConfig.mode === 'openai') ? 'Powered by OpenAI-compatible' : (appConfig.mode === 'gemini') ? 'Powered by Google Gemini' : 'Powered by —';
+            }
+
+            // Disable/enable UI as needed
+            const canRun = appConfig.mode !== 'none';
+            convertButton.disabled = !canRun;
+            previewToggle.disabled = !canRun;
+
+            // Safe diagnostic log (no secrets)
+            console.log('LLM init', {
+                mode: appConfig.mode,
+                hasApiKey: !!appConfig.apiKey,
+                hasBaseUrl: !!appConfig.baseUrl,
+                model: appConfig.model
+            });
+        }
+
         Neutralino.events.on('ready', async () => {
             try {
-                API_KEY = await Neutralino.os.getEnv('GEMINI_API_KEY');
-                if (!API_KEY) {
-                    API_KEY = await loadApiKeyFromEnvFiles();
-                }
-                console.log('Neutralino ready. API key loaded?', !!API_KEY);
+                await initConfigAndUI();
             } catch (e) {
-                console.error('Failed to resolve API key from env/.env:', e);
+                console.error('Failed to init config/UI:', e);
             }
         });
         
@@ -211,12 +278,62 @@
 4.  変換結果以外の余計な説明、前置き、後書きは一切含めず、変換後の日本語の文章のみを出力してください。
 5.  入力が空の場合は、何も出力しないでください。`;
 
-        // Refactored API call logic
+        // OpenAI-compatible API call (OpenRouter/Ollama/etc.)
+        async function callOpenAICompatibleAPI(userInput) {
+            if (!appConfig.baseUrl || !appConfig.model) {
+                throw new Error('OpenAI-compatible mode is not configured properly.');
+            }
+            const apiUrl = `${normalizeBaseUrl(appConfig.baseUrl)}/v1/chat/completions`;
+            const body = {
+                model: appConfig.model,
+                messages: [
+                    { role: 'system', content: systemPrompt },
+                    { role: 'user', content: userInput }
+                ],
+                temperature: 0.2
+            };
+
+            let response;
+            let success = false;
+            let delay = 1000;
+            for (let i = 0; i < 3; i++) {
+                try {
+                    response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            ...(appConfig.apiKey ? { 'Authorization': `Bearer ${appConfig.apiKey}` } : {})
+                        },
+                        body: JSON.stringify(body)
+                    });
+                    if (response.ok) { success = true; break; }
+                    if (response.status === 429 || response.status >= 500) {
+                        await new Promise(r => setTimeout(r, delay));
+                        delay *= 2;
+                    } else {
+                        break;
+                    }
+                } catch (_) {
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+            if (!success || !response.ok) throw new Error('OpenAI-compatible API request failed after retries.');
+
+            const data = await response.json();
+            const text = data?.choices?.[0]?.message?.content;
+            if (typeof text === 'string' && text.length) return text;
+            console.error('Unexpected OpenAI-compatible response:', data);
+            throw new Error('Invalid OpenAI-compatible response.');
+        }
+
+        // Gemini API call
         async function callGeminiAPI(userInput) {
-            if (!API_KEY) {
+            if (!appConfig.apiKey) {
                 throw new Error('GEMINI_API_KEY is not set. Ensure .env exists and nativeAllowList allows os.getEnv.');
             }
-            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${API_KEY}`;
+            const model = appConfig.model || DEFAULT_GEMINI_MODEL;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(appConfig.apiKey)}`;
             const payload = {
                 contents: [{ parts: [{ text: userInput }] }],
                 systemInstruction: { parts: [{ text: systemPrompt }] },
@@ -261,6 +378,13 @@
             }
         }
 
+        // Unified dispatcher
+        async function callLLM(userInput) {
+            if (appConfig.mode === 'openai') return callOpenAICompatibleAPI(userInput);
+            if (appConfig.mode === 'gemini') return callGeminiAPI(userInput);
+            throw new Error('LLM is not configured.');
+        }
+
         // Convert button click handler
         convertButton.addEventListener('click', async () => {
             const userInput = inputText.value.trim();
@@ -268,7 +392,7 @@
 
             setLoading(true);
             try {
-                const convertedText = await callGeminiAPI(userInput);
+                const convertedText = await callLLM(userInput);
                 setFinalOutput(convertedText);
                 lastCheckedInputForPreview = userInput; // 変換が成功した入力を記録し、不要なプレビューを防ぐ
                 addToHistory(userInput, convertedText);
@@ -396,7 +520,7 @@
             // 文字数変化のチェックを撤廃し、入力が続いていればプレビューを実行するように変更
             
             try {
-                const previewText = await callGeminiAPI(currentInput);
+                const previewText = await callLLM(currentInput);
                 // 入力が続いている間もプレビューを表示するため、条件分岐を削除
                 setPreviewOutput(previewText);
             } catch (error) {

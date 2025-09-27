@@ -1,6 +1,6 @@
 # fm-japanese-input
 
-LLM 日本語変換（ローマ字＋英語混在入力を自然な日本語へ変換するデスクトップアプリ）。Neutralinojs 上で動作し、Google Gemini API を利用して変換を行います。
+LLM 日本語変換（ローマ字＋英語混在入力を自然な日本語へ変換するデスクトップアプリ）。Neutralinojs 上で動作し、Google Gemini または OpenAI API 互換プロバイダ（OpenRouter / Ollama 等）を利用して変換を行います。
 
 > 注記: 本 README は開発者向けです。正式な起動・ビルド手順は後日記載します。
 
@@ -28,27 +28,65 @@ LLM 日本語変換（ローマ字＋英語混在入力を自然な日本語へ�
   - 失敗時は UI にエラー表示
 
 ## 必要要件（概要）
-- Google Gemini API キー（GEMINI_API_KEY）
-  - 現実装のエンドポイント: `gemini-2.5-flash-preview-05-20`
+- いずれかの LLM プロバイダ設定
+  - OpenAI API 互換（OpenRouter / Ollama 等）
+    - LLM_BASE_URL（例: https://openrouter.ai/api または http://localhost:11434）
+    - LLM_MODEL（例: openai/gpt-4o-mini, llama3.1 など）
+    - LLM_API_KEY（任意: OpenRouter 等で必要。Ollama は通常不要）
+  - もしくは Google Gemini
+    - GEMINI_API_KEY
+    - 任意で LLM_MODEL（Gemini モデル名の上書き）
 - Neutralino CLI などの開発環境
   - 具体的な起動・ビルド手順は後日追記します
 
-## 環境変数の設定（API キー）
-このアプリは起動時に以下の順で API キーを探索します。
-1. OS の環境変数 `GEMINI_API_KEY`
-2. `.env` ファイル（アプリ本体パス（NL_PATH）直下、または実行時カレント（NL_CWD）直下）
+## 設定と優先順位（OpenAI 互換 / Gemini）
+このアプリは起動時に以下の順で環境変数や .env を解決し、動作モードを決定します。
 
-`.env` 例:
+1) OpenAI API 互換モード（優先）
+- 条件: LLM_BASE_URL と LLM_MODEL が設定されている
+- LLM_API_KEY は任意（OpenRouter などでは必要、Ollama では不要）
+- エンドポイント: `${LLM_BASE_URL}/v1/chat/completions`
+- リクエスト: messages 形式（system + user）、temperature=0.2、非ストリーミング
+- 認証: LLM_API_KEY がある場合のみ Authorization: Bearer を付与
 
+2) Gemini モード（フォールバック）
+- 条件: OpenAI 互換モードでない かつ GEMINI_API_KEY が設定されている
+- モデル名: LLM_MODEL があればそれを使用、なければデフォルト `gemini-2.5-flash-preview-05-20`
+- エンドポイント: `https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent?key=...`
+
+3) 未設定
+- いずれの条件も満たさない場合、UI 上で案内を表示し、変換操作は無効化されます。
+
+解決順序（共通）
+- OS 環境変数を優先し、無ければ .env（NL_PATH または NL_CWD 直下）を参照します。
+- .env は KEY=VALUE 形式で、コメント行（#）や空行は無視されます。
+
+`.env` 例（OpenRouter）:
 ```
-GEMINI_API_KEY=your_api_key_here
+LLM_BASE_URL=https://openrouter.ai/api
+LLM_MODEL=openai/gpt-4o-mini
+LLM_API_KEY=sk-or-v1_xxx
+```
+
+`.env` 例（Ollama）:
+```
+LLM_BASE_URL=http://localhost:11434
+LLM_MODEL=llama3.1
+# LLM_API_KEY は不要
+```
+
+`.env` 例（Gemini）:
+```
+GEMINI_API_KEY=your_gemini_key
+# 任意で Gemini のモデル名を上書き
+LLM_MODEL=gemini-1.5-flash
 ```
 
 - 先頭・末尾の引用符は不要です（付ける場合は "..." でも可）。
-- `.env` をリポジトリにコミットしないよう注意してください（.gitignore 推奨）。
+- `.env` はコミットしないでください（.gitignore 推奨）。
 
 補足（実装上の読み込み箇所）:
-- OS 環境変数: `Neutralino.os.getEnv('GEMINI_API_KEY')`
+- OS 環境変数: `Neutralino.os.getEnv(...)`
 - `.env` 探索: `filesystem.getJoinedPath(NL_PATH, '.env')` と `filesystem.getJoinedPath(NL_CWD, '.env')` を順に読み込み
 
 ## 使い方（UI の流れ）
@@ -60,8 +98,9 @@ GEMINI_API_KEY=your_api_key_here
 
 ## 設定とカスタマイズ（開発者向け）
 - モデル／エンドポイント
-  - `www/index.html` 内の `callGeminiAPI()` で使用モデルと URL を定義
-  - 既定: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`
+  - OpenAI 互換: `callOpenAICompatibleAPI()` にて `${LLM_BASE_URL}/v1/chat/completions` を使用
+  - Gemini: `callGeminiAPI()` にて `https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent`
+  - Gemini の既定モデル: `gemini-2.5-flash-preview-05-20`（LLM_MODEL で上書き可）
 - システムプロンプト
   - `www/index.html` の `systemPrompt` を編集
   - 変換仕様（英語は保持、ローマ字を自然な日本語に、説明文の出力禁止 等）を制御
