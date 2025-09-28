@@ -30,7 +30,7 @@ jobs:
           cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
           cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
           ls -Ral dist
-          cd dist && zip -r fm-japanese-input-${{ matrix.platform }}
+          cd dist && zip fm-japanese-input-${{ matrix.platform }}
 
       - name: debug
         run: ls -Ral dist
