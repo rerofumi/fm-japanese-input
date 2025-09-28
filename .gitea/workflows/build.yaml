@@ -26,7 +26,7 @@ jobs:
           npx @neutralinojs/neu build
           ls -Ral dist
           mkdir -p dist/fm-japanese-input-${{ matrix.platform }}
-          cp dist/fm-japanese-input/*-${{ matrix.platform }}-* dist/fm-japanese-input-${{ matrix.platform }}/
+          cp dist/fm-japanese-input/*-${{ matrix.platform }}_* dist/fm-japanese-input-${{ matrix.platform }}/
           cp dist/fm-japanese-input/resources.neu dist/fm-japanese-input-${{ matrix.platform }}/
           cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
           cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
