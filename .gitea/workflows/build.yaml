@@ -1,6 +1,7 @@
 name: Build and Release
 on:
   push:
+    branches: [ main ]
     tags: ["v*"]
 
 jobs:
@@ -8,18 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        platform: [linux, windows, darwin]
-        arch: [x64, arm64]
-        include:
-          - platform: linux
-            os: ubuntu-latest
-            binary_ext: ""
-          - platform: windows
-            os: windows-latest
-            binary_ext: ".exe"
-          - platform: darwin
-            os: macos-latest
-            binary_ext: ""
+        platform: [linux, windows, mac]
 
     steps:
       - name: Checkout code
@@ -32,9 +22,16 @@ jobs:
 
       - name: Build Neutralino.js app
         run: |
-          npx neu build --release
-          mkdir -p dist/${{ matrix.platform }}-${{ matrix.arch }}
-          cp -r dist/* dist/${{ matrix.platform }}-${{ matrix.arch }}/
+          npx @neutralinojs/neu build
+          mkdir -p dist/${{ matrix.platform }}
+          cp dist/*-${{ matrix.platform }}-* dist/fm-japanese-input-${{ matrix.platform }}/
+          cp dist/resources.neu dist/fm-japanese-input-${{ matrix.platform }}/
+          cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
+          cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
+          cd dist && dist/fm-japanese-input-${{ matrix.platform }}/
+
+      - name: debug
+        run: ls -Ral dist
 
       - name: Upload binary to release (Gitea API)
         env:
@@ -45,5 +42,5 @@ jobs:
           curl -X POST \
             -H "Authorization: token $GITEA_TOKEN" \
             -H "Content-Type: application/octet-stream" \
-            --data-binary @"./dist/${{ matrix.platform }}-${{ matrix.arch }}/neutralino${{ matrix.binary_ext }}" \
-            "https://your-gitea-instance.com/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=neutralino-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.binary_ext }}"
+            --data-binary @"./dist/fm-japanese-input-${{ matrix.platform }}.zip" \
+            "https://your-gitea-instance.com/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=fm-japanese-input-${{ matrix.platform }}.zip"
