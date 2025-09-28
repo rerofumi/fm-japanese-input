@@ -22,6 +22,7 @@ jobs:
 
       - name: Build Neutralino.js app
         run: |
+          npx @neutralinojs/neu update -l
           npx @neutralinojs/neu build
           ls -Ral dist
           mkdir -p dist/fm-japanese-input-${{ matrix.platform }}
