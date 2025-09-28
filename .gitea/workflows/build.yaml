@@ -1,7 +1,6 @@
 name: Build and Release
 on:
   push:
-    branches: [ main ]
     tags: ["v*"]
 
 jobs:
@@ -30,6 +29,11 @@ jobs:
           cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
           cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
           cd dist && zip -r fm-japanese-input-${{ matrix.platform }}.zip fm-japanese-input-${{ matrix.platform }}
+
+      - name: Upload binary to release
+        uses: akkuman/gitea-release-action@v1
+        with:
+          token: ${{ secrets.API_TOKEN }}
 
       - name: Upload binary to release (Gitea API)
         env:
