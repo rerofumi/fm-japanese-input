@@ -30,9 +30,6 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install dependencies
-        run: npm install
-
       - name: Build Neutralino.js app
         run: |
           npx neu build --release
