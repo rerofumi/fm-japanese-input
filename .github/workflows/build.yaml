@@ -1,0 +1,41 @@
+name: Build and Release
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux, win, mac]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Build Neutralino.js app
+        run: |
+          npx @neutralinojs/neu update -l
+          npx @neutralinojs/neu build
+          mkdir -p dist/fm-japanese-input-${{ matrix.platform }}
+          cp dist/fm-japanese-input/*-${{ matrix.platform }}_* dist/fm-japanese-input-${{ matrix.platform }}/
+          cp dist/fm-japanese-input/resources.neu dist/fm-japanese-input-${{ matrix.platform }}/
+          cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
+          cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
+          cd dist && zip -r fm-japanese-input-${{ matrix.platform }}.zip fm-japanese-input-${{ matrix.platform }}
+
+      - name: Upload binary to release
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: dist/fm-japanese-input-${{ matrix.platform }}.zip
+          asset_name: fm-japanese-input-${{ matrix.platform }}.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+
