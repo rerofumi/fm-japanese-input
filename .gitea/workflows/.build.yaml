@@ -1,0 +1,52 @@
+name: Build and Release
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [linux, windows, darwin]
+        arch: [x64, arm64]
+        include:
+          - platform: linux
+            os: ubuntu-latest
+            binary_ext: ""
+          - platform: windows
+            os: windows-latest
+            binary_ext: ".exe"
+          - platform: darwin
+            os: macos-latest
+            binary_ext: ""
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Neutralino.js app
+        run: |
+          npx neu build --release
+          mkdir -p dist/${{ matrix.platform }}-${{ matrix.arch }}
+          cp -r dist/* dist/${{ matrix.platform }}-${{ matrix.arch }}/
+
+      - name: Upload binary to release (Gitea API)
+        env:
+          GITEA_TOKEN: ${{ secrets.API_TOKEN }}
+          RELEASE_ID: ${{ github.event.release.id }}
+          REPO: ${{ github.repository }}
+        run: |
+          curl -X POST \
+            -H "Authorization: token $GITEA_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            --data-binary @"./dist/${{ matrix.platform }}-${{ matrix.arch }}/neutralino${{ matrix.binary_ext }}" \
+            "https://your-gitea-instance.com/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=neutralino-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.binary_ext }}"
