@@ -34,16 +34,5 @@ jobs:
         uses: akkuman/gitea-release-action@v1
         with:
           token: ${{ secrets.API_TOKEN }}
+          files: dist/fm-japanese-input-${{ matrix.platform }}.zip
 
-      - name: Upload binary to release (Gitea API)
-        env:
-          GITEA_TOKEN: ${{ secrets.API_TOKEN }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          RELEASE_ID: ${{ github.event.release.id }}
-          REPO: ${{ github.repository }}
-        run: |
-          curl -X POST \
-            -H "Authorization: token $GITEA_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            --data-binary @"./dist/fm-japanese-input-${{ matrix.platform }}.zip" \
-            "http://192.168.0.120:33000/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=fm-japanese-input-${{ matrix.platform }}.zip"
