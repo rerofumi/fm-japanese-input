@@ -24,8 +24,8 @@ jobs:
         run: |
           npx @neutralinojs/neu update -l
           npx @neutralinojs/neu build
-          ls -Ral dist
           mkdir -p dist/fm-japanese-input-${{ matrix.platform }}
+          ls -Ral dist
           cp dist/fm-japanese-input/*-${{ matrix.platform }}_* dist/fm-japanese-input-${{ matrix.platform }}/
           cp dist/fm-japanese-input/resources.neu dist/fm-japanese-input-${{ matrix.platform }}/
           cp README.md dist/fm-japanese-input-${{ matrix.platform }}/
