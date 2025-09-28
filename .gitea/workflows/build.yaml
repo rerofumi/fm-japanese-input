@@ -45,4 +45,4 @@ jobs:
             -H "Authorization: token $GITEA_TOKEN" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @"./dist/fm-japanese-input-${{ matrix.platform }}.zip" \
-            "https://your-gitea-instance.com/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=fm-japanese-input-${{ matrix.platform }}.zip"
+            "http://192.168.0.120:33000/api/v1/repos/$REPO/releases/$RELEASE_ID/assets?name=fm-japanese-input-${{ matrix.platform }}.zip"
