@@ -17,3 +17,6 @@
 # Jujutsu repository
 .jj/
 
+# Visual Studio
+.vs/
+
