@@ -33,6 +33,7 @@ jobs:
       - name: Upload binary to release
         uses: svenstaro/upload-release-action@v2
         with:
+          release_name: ${{ github.ref }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: dist/fm-japanese-input-${{ matrix.platform }}.zip
           asset_name: fm-japanese-input-${{ matrix.platform }}.zip
