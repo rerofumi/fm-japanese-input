@@ -30,17 +30,6 @@ jobs:
           cp LICENSE dist/fm-japanese-input-${{ matrix.platform }}/
           cd dist && zip -r fm-japanese-input-${{ matrix.platform }}.zip fm-japanese-input-${{ matrix.platform }}
 
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
-
       - name: Upload binary to release
         uses: svenstaro/upload-release-action@v2
         with:
@@ -48,4 +37,5 @@ jobs:
           tag: ${{ github.ref }}
           file: dist/fm-japanese-input-${{ matrix.platform }}.zip
           asset_name: fm-japanese-input-${{ matrix.platform }}.zip
+          overwrite: true
 
